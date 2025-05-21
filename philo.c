@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <semaphore.h>
 
 // Mueve el cursor a la linea x, columna y (ver codigos ANSI).
 #define xy(x, y) printf("\033[%d;%dH", x, y)
@@ -28,6 +29,10 @@ int segs_come = 1;
 
 // Mutex
 static pthread_mutex_t screen = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t tenedor[N];
+
+// Semáforo
+sem_t sem_filosofos; // Semáforo global
 
 // Imprime en la posición (x,y) la cadena *fmt.
 void print(int y, int x, const char *fmt, ...)
@@ -44,34 +49,33 @@ void print(int y, int x, const char *fmt, ...)
 // El filosofo come.
 void eat(int id)
 {
-    int f[2]; // tenedores 
-    int ration, i; 
+    int left = id;
+    int right = (id + 1) % N;
+    int ration, i;
 
-    // los tenedores a tomar
-    f[0] = id;
-    f[1] = (id + 1) % N;
+    sem_wait(&sem_filosofos); // Espera turno para intentar comer
 
-    clear_eol(id);
-    print(id, 18, "..oO (necesito tenedores)");
-    sleep(2);
-
-    // Toma los tenedores.
-    for (i = 0; i < 2; i++) {
-        if (!i) {
-            clear_eol(id);
-	    }
-
-        print(id, 18 + (f[i] != id) * 12, "tenedor%d", f[i]);
-
-        // Espera para tomar el segundo tenedor.
-        sleep(3);
+    // Para evitar deadlock: el último filósofo toma primero el derecho
+    if (id == N - 1) {
+        pthread_mutex_lock(&tenedor[right]);
+        pthread_mutex_lock(&tenedor[left]);
+    } else {
+        pthread_mutex_lock(&tenedor[left]);
+        pthread_mutex_lock(&tenedor[right]);
     }
 
-    // Come durante un tiempo.
+    clear_eol(id);
+    print(id, 18, "..oO (comiendo)");
+    sleep(2);
+
     for (i = 0, ration = 3 + rand() % 8; i < ration; i++) {
         print(id, 40 + i * 4, "ñam");
         sleep(1 + (rand() % segs_come));
     }
+
+    pthread_mutex_unlock(&tenedor[left]);
+    pthread_mutex_unlock(&tenedor[right]);
+    sem_post(&sem_filosofos); // Libera el turno
 }
 
 // El filosofo piensa.
@@ -133,6 +137,14 @@ int main(int argc, char* argv[])
     srand(getpid());
 
     clear(); 
+
+    // Inicializar el semáforo
+    sem_init(&sem_filosofos, 0, N - 1); // Solo N-1 filósofos pueden intentar comer a la vez
+
+    // Inicializar los mutex de los tenedores
+    for (i = 0; i < N; i++) {
+        pthread_mutex_init(&tenedor[i], NULL);
+    }
 
     for (i = 0; i < N; i++) {
         id[i] = i;
