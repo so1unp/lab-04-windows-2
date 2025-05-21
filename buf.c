@@ -42,11 +42,11 @@ static void *producer(void *p)
     {
 
         sem_wait(&vacio);           // espera a que haya espacio en el buffer
-        pthread_mutex_lock(&mutex); // bloquea que otros hilos escriban en el buffer
+        pthread_mutex_lock(&mutex); // adquiere el acceso exclusivo al buffer
 
         params->buf->buf[i % params->buf->size] = i; // seccion critica
 
-        pthread_mutex_unlock(&mutex); // libera el buffer para que otros hilos puedan escribir
+        pthread_mutex_unlock(&mutex); // libera el bloqueo del buffer
         sem_post(&lleno);             // indica que hay un elemento disponible para consumir
 
         // Espera una cantidad aleatoria de microsegundos.
@@ -70,11 +70,11 @@ static void *consumer(void *p)
     {
 
         sem_wait(&lleno);           // espera a que haya un elemento para consumir
-        pthread_mutex_lock(&mutex); // bloquea que otros hilos escriban en el buffer
+        pthread_mutex_lock(&mutex); // adquiere el acceso exclusivo al buffer
 
         reader_results[i] = params->buf->buf[i % params->buf->size];
 
-        pthread_mutex_unlock(&mutex); // libera el buffer para que otros hilos puedan escribir
+        pthread_mutex_unlock(&mutex); // libera el bloqueo del buffer
         sem_post(&vacio);             // indica que hay espacio en el buffer para escribir
 
         // Espera una cantidad aleatoria de microsegundos.
